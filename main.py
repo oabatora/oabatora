@@ -96,6 +96,25 @@ async def on_ready():
 
 
 # =========================
+# Connection Events
+# =========================
+
+@bot.event
+async def on_disconnect():
+    print("⚠️ البوت فقد الاتصال بـ Discord (Network Disconnect).")
+    # Reset playing state for all guilds to prevent getting stuck
+    playing.clear()
+
+@bot.event
+async def on_resumed():
+    print("✅ البوت استعاد الاتصال بـ Discord!")
+
+@bot.event
+async def on_connect():
+    print("🌐 البوت متصل بـ Discord.")
+
+
+# =========================
 # Welcome & Goodbye Events
 # =========================
 
@@ -329,6 +348,24 @@ async def play_audio(ctx, filename):
     voice_channel = ctx.author.voice.channel
     await play_in_channel(voice_channel, filename, ctx=ctx)
 
+
+# =========================
+# Error Handling
+# =========================
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandInvokeError):
+        original = error.original
+        if isinstance(original, discord.errors.ClientException):
+            print(f"⚠️ خطأ أثناء تشغيل الأمر: {original}")
+            # Do not send a message to the user for every client exception to avoid spam, just log it.
+        elif isinstance(original, (discord.errors.ConnectionClosed, discord.errors.GatewayNotFound)):
+             print(f"⚠️ خطأ في الاتصال بالشبكة أثناء تشغيل الأمر: {original}")
+        else:
+             print(f"❌ خطأ غير متوقع: {original}")
+    else:
+        print(f"⚠️ Command Error: {error}")
 
 # =========================
 # إنشاء !audio1 حتى !audio10
