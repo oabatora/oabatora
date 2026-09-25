@@ -96,6 +96,26 @@ async def on_ready():
 
 
 # =========================
+# Welcome & Goodbye Events
+# =========================
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member.bot:
+        return
+
+    # User joined a voice channel
+    if before.channel is None and after.channel is not None:
+        print(f"👋 {member.name} joined {after.channel.name}")
+        await play_in_channel(after.channel, "MAR7BABIK.mp3")
+
+    # User left a voice channel
+    elif before.channel is not None and after.channel is None:
+        print(f"🏃 {member.name} left {before.channel.name}")
+        await play_in_channel(before.channel, "SIR T9AWED.mp3")
+
+
+# =========================
 # تشغيل ملف صوتي
 # =========================
 
@@ -133,6 +153,64 @@ async def play_file(voice_client, filename):
 
 
 # =========================
+# Play in specific channel
+# =========================
+
+async def play_in_channel(voice_channel, filename, ctx=None):
+    guild_id = voice_channel.guild.id
+
+    if playing.get(guild_id, False):
+        print(f"⏸️ البوت مشغول، تجاهل: {filename}")
+        return False
+
+    playing[guild_id] = True
+    voice_client = None
+
+    try:
+        existing_voice = voice_channel.guild.voice_client
+
+        if existing_voice:
+            if existing_voice.is_connected():
+                print("⚠️ البوت مازال داخل Voice، تجاهل.")
+                playing[guild_id] = False
+                return False
+            else:
+                try:
+                    await existing_voice.disconnect(force=True)
+                except Exception:
+                    pass
+
+        print(f"🔊 Connecting to: {voice_channel.name}")
+        voice_client = await voice_channel.connect(reconnect=False, timeout=30)
+        print("✅ Voice connection established!")
+
+        if ctx:
+            await ctx.send(f"🔊 كيشغل: `{filename}`")
+
+        await play_file(voice_client, filename)
+
+        if voice_client.is_connected():
+            voice_client.stop()
+            await voice_client.disconnect()
+            print("👋 الصوت سالا، والبوت خرج.")
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Error: {repr(e)}")
+        if voice_client:
+            try:
+                if voice_client.is_connected():
+                    await voice_client.disconnect(force=True)
+            except Exception:
+                pass
+        return False
+    finally:
+        playing[guild_id] = False
+        print("🟢 البوت فاضي، جديدة ممكنة.")
+
+
+# =========================
 # Command Audio
 # =========================
 
@@ -149,9 +227,8 @@ async def play_audio(ctx, filename):
     # =========================
 
     if user_id not in user_commands:
-
         user_commands[user_id] = {
-            "count": 0,
+            "timestamps": [],
             "cooldown_until": 0
         }
 
@@ -169,16 +246,6 @@ async def play_audio(ctx, filename):
         )
 
         return
-
-
-    # =========================
-    # إذا سالات الدقيقة
-    # =========================
-
-    if data["cooldown_until"] > 0:
-
-        data["cooldown_until"] = 0
-        data["count"] = 0
 
 
     # =========================
@@ -224,16 +291,21 @@ async def play_audio(ctx, filename):
 
 
     # =========================
-    # الرابعة مرفوضة
+    # فحص النافذة الزمنية 60 ثانية
     # =========================
 
-    if data["count"] >= MAX_COMMANDS:
+    # إزالة الأوامر القديمة
+    data["timestamps"] = [ts for ts in data["timestamps"] if now - ts < COOLDOWN]
 
+    if len(data["timestamps"]) >= MAX_COMMANDS:
+        # الرابعة مرفوضة: تعيين الكولداون وتشغيل ملف الوداع
         data["cooldown_until"] = now + COOLDOWN
 
         await ctx.send(
-            "SIR TA7WA A ZEBI"
+            "⚠️ انت في فترة Cooldown! 3 أوامر في الدقيقة فقط."
         )
+
+        await play_in_channel(ctx.author.voice.channel, "SIR T9AWED.mp3", ctx=ctx)
 
         return
 
@@ -242,131 +314,20 @@ async def play_audio(ctx, filename):
     # Command مقبولة
     # =========================
 
-    data["count"] += 1
+    data["timestamps"].append(now)
 
     print(
         f"👤 User {user_id}: "
-        f"Command {data['count']}/{MAX_COMMANDS}"
+        f"Command {len(data['timestamps'])}/{MAX_COMMANDS}"
     )
 
 
     # =========================
-    # البوت أصبح مشغول
+    # تشغيل بالاستعانة بالدالة
     # =========================
 
-    playing[guild_id] = True
-
-    voice_client = None
-
-    try:
-
-        voice_channel = ctx.author.voice.channel
-
-
-        # =========================
-        # تأكد ما كاينش Voice Client قديم
-        # =========================
-
-        existing_voice = ctx.guild.voice_client
-
-        if existing_voice:
-
-            if existing_voice.is_connected():
-
-                print(
-                    "⚠️ البوت مازال داخل Voice، تجاهل command."
-                )
-
-                playing[guild_id] = False
-                return
-
-            else:
-
-                try:
-                    await existing_voice.disconnect(
-                        force=True
-                    )
-                except Exception:
-                    pass
-
-
-        # =========================
-        # يدخل للروم
-        # =========================
-
-        print(
-            f"🔊 Connecting to: {voice_channel.name}"
-        )
-
-        voice_client = await voice_channel.connect(
-            reconnect=False,
-            timeout=30
-        )
-
-        print(
-            "✅ Voice connection established!"
-        )
-
-
-        # =========================
-        # تشغيل الصوت
-        # =========================
-
-        await ctx.send(
-            f"🔊 كيشغل: `{filename}`"
-        )
-
-        await play_file(
-            voice_client,
-            filename
-        )
-
-
-        # =========================
-        # يخرج من Voice
-        # =========================
-
-        if voice_client.is_connected():
-
-            voice_client.stop()
-            await voice_client.disconnect()
-
-            print(
-                "👋 الصوت سالا، والبوت خرج."
-            )
-
-
-    except Exception as e:
-
-        print(
-            f"❌ Error: {repr(e)}"
-        )
-
-        if voice_client:
-
-            try:
-
-                if voice_client.is_connected():
-
-                    await voice_client.disconnect(
-                        force=True
-                    )
-
-            except Exception:
-                pass
-
-
-    finally:
-
-        # =========================
-        # البوت ولى فاضي
-        # =========================
-
-        playing[guild_id] = False
-
-        print(
-            "🟢 البوت فاضي، command جديدة ممكنة."
-        )
+    voice_channel = ctx.author.voice.channel
+    await play_in_channel(voice_channel, filename, ctx=ctx)
 
 
 # =========================
