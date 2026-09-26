@@ -129,17 +129,17 @@ async def on_voice_state_update(member, before, after):
     # User joined a voice channel
     if before.channel is None and after.channel is not None:
         print(f"👋 {member.name} joined {after.channel.name}")
-        await play_in_channel(after.channel, r"C:\Users\oussa\Desktop\MAR7BABIK.m4a")
+        await play_in_channel(after.channel, "MAR7BABIK.mp3")
 
     # User left a voice channel
     elif before.channel is not None and after.channel is None:
         print(f"🏃 {member.name} left {before.channel.name}")
-        await play_in_channel(before.channel, r"C:\Users\oussa\Desktop\SIR T9AWED.m4a")
+        await play_in_channel(before.channel, "SIR-T9AWED.mp3")
 
     # User switched channels
     elif before.channel is not None and after.channel is not None and before.channel != after.channel:
         print(f"🏃👋 {member.name} switched from {before.channel.name} to {after.channel.name}")
-        await play_in_channel(after.channel, r"C:\Users\oussa\Desktop\MAR7BABIK.m4a")
+        await play_in_channel(after.channel, "MAR7BABIK.mp3")
 
 
 # =========================
@@ -336,7 +336,7 @@ async def play_audio(ctx, filename):
             "⚠️ انت في فترة Cooldown! 3 أوامر في الدقيقة فقط."
         )
 
-        await play_in_channel(ctx.author.voice.channel, r"C:\Users\oussa\Desktop\SIR T9AWED.m4a", ctx=ctx)
+        await play_in_channel(ctx.author.voice.channel, "SIR-T9AWED.mp3", ctx=ctx)
 
         return
 
