@@ -70,6 +70,7 @@ AUDIO_FILES = {
 # =========================
 
 playing = {}
+playback_tasks = {}
 
 
 # =========================
@@ -104,6 +105,7 @@ async def on_disconnect():
     print("⚠️ البوت فقد الاتصال بـ Discord (Network Disconnect).")
     # Reset playing state for all guilds to prevent getting stuck
     playing.clear()
+    playback_tasks.clear()
 
 @bot.event
 async def on_resumed():
@@ -123,15 +125,22 @@ async def on_voice_state_update(member, before, after):
     if member.bot:
         return
 
+    print(f"🎤 Voice state update triggered for {member.name}")
+
     # User joined a voice channel
     if before.channel is None and after.channel is not None:
         print(f"👋 {member.name} joined {after.channel.name}")
-        await play_in_channel(after.channel, "MAR7BABIK.mp3")
+        await play_in_channel(after.channel, r"MAR7BABIK.m4a")
 
     # User left a voice channel
     elif before.channel is not None and after.channel is None:
         print(f"🏃 {member.name} left {before.channel.name}")
-        await play_in_channel(before.channel, "SIR T9AWED.mp3")
+        await play_in_channel(before.channel, r"SIR T9AWED.m4a")
+
+    # User switched channels
+    elif before.channel is not None and after.channel is not None and before.channel != after.channel:
+        print(f"🏃👋 {member.name} switched from {before.channel.name} to {after.channel.name}")
+        await play_in_channel(after.channel, r"MAR7BABIK.m4a")
 
 
 # =========================
@@ -175,58 +184,62 @@ async def play_file(voice_client, filename):
 # Play in specific channel
 # =========================
 
+import uuid
+
 async def play_in_channel(voice_channel, filename, ctx=None):
     guild_id = voice_channel.guild.id
+    task_id = str(uuid.uuid4())
 
-    if playing.get(guild_id, False):
-        print(f"⏸️ البوت مشغول، تجاهل: {filename}")
-        return False
+    # Assign this task as the active one
+    playback_tasks[guild_id] = task_id
 
-    playing[guild_id] = True
-    voice_client = None
+    voice_client = voice_channel.guild.voice_client
 
     try:
-        existing_voice = voice_channel.guild.voice_client
-
-        if existing_voice:
-            if existing_voice.is_connected():
-                print("⚠️ البوت مازال داخل Voice، تجاهل.")
-                playing[guild_id] = False
-                return False
-            else:
+        if voice_client and voice_client.is_connected():
+            if voice_client.channel != voice_channel:
+                print(f"🔄 Moving to new channel: {voice_channel.name}")
+                await voice_client.move_to(voice_channel)
+            if voice_client.is_playing():
+                print("⏹️ Stopping current audio to play new one.")
+                voice_client.stop()
+        else:
+            if voice_client:
+                # Disconnect any ghost sessions
                 try:
-                    await existing_voice.disconnect(force=True)
+                    await voice_client.disconnect(force=True)
                 except Exception:
                     pass
 
-        print(f"🔊 Connecting to: {voice_channel.name}")
-        voice_client = await voice_channel.connect(reconnect=False, timeout=30)
-        print("✅ Voice connection established!")
+            print(f"🔊 Connecting to: {voice_channel.name}")
+            voice_client = await voice_channel.connect(reconnect=False, timeout=30)
+            print("✅ Voice connection established!")
 
         if ctx:
             await ctx.send(f"🔊 كيشغل: `{filename}`")
 
         await play_file(voice_client, filename)
 
-        if voice_client.is_connected():
-            voice_client.stop()
-            await voice_client.disconnect()
-            print("👋 الصوت سالا، والبوت خرج.")
+        # Only disconnect if this task is still the most recent one
+        if playback_tasks.get(guild_id) == task_id:
+            if voice_client and voice_client.is_connected():
+                voice_client.stop()
+                await voice_client.disconnect()
+                print("👋 الصوت سالا، والبوت خرج.")
 
         return True
 
     except Exception as e:
         print(f"❌ Error: {repr(e)}")
-        if voice_client:
-            try:
-                if voice_client.is_connected():
-                    await voice_client.disconnect(force=True)
-            except Exception:
-                pass
+        # Only cleanup connection on error if no other task took over
+        if playback_tasks.get(guild_id) == task_id:
+            if voice_client:
+                try:
+                    if voice_client.is_connected():
+                        await voice_client.disconnect(force=True)
+                except Exception:
+                    pass
         return False
-    finally:
-        playing[guild_id] = False
-        print("🟢 البوت فاضي، جديدة ممكنة.")
 
 
 # =========================
@@ -324,7 +337,7 @@ async def play_audio(ctx, filename):
             "⚠️ انت في فترة Cooldown! 3 أوامر في الدقيقة فقط."
         )
 
-        await play_in_channel(ctx.author.voice.channel, "SIR T9AWED.mp3", ctx=ctx)
+        await play_in_channel(ctx.author.voice.channel, r"SIR T9AWED.m4a", ctx=ctx)
 
         return
 
